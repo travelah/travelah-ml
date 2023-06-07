@@ -9,10 +9,6 @@ Original file is located at
 
 import pandas as pd
 import numpy as np
-import tensorflow as tf
-import ipywidgets as widgets
-from IPython.display import display
-from tensorflow import keras
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
 from sklearn.model_selection import train_test_split
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -22,22 +18,12 @@ nltk.download("stopwords")
 from nltk.corpus import stopwords
 import re
 from nltk.corpus import stopwords as nltk_stopwords
-from sklearn.model_selection import train_test_split
-from tensorflow.keras.preprocessing.text import Tokenizer
-from tensorflow.keras.preprocessing.sequence import pad_sequences
-from tensorflow.keras.models import Model
-from tensorflow.keras.layers import Input, Embedding, Flatten, Dense
-from tensorflow.keras.optimizers import Adam
-from sklearn.metrics.pairwise import cosine_similarity
-from sklearn.preprocessing import LabelEncoder
-from tensorflow.keras.losses import CategoricalCrossentropy
-from tensorflow.keras.metrics import CategoricalAccuracy
 import random
 
 #Prepare dataset
-travel_df = pd.read_csv("data/travel_spot_datasets_final_v2.csv")
-hotel_df = pd.read_csv('data/booking_datasets_final_updated_with_region.csv')
-food_df = pd.read_csv('data/food_datasets_final_updated_with_region.csv')
+travel_df = pd.read_csv("Data/travel_spot_datasets_final_updated_with_region.csv")
+hotel_df = pd.read_csv('Data/booking_datasets_final_updated_with_region.csv')
+food_df = pd.read_csv('Data/food_datasets_final_updated_with_region.csv')
 
 #Text Cleaning
 clean_spcl = re.compile('[/(){}\[\]\|@,;]')
@@ -91,7 +77,7 @@ food_df = food_df.reset_index(drop=True)
 
 
 #Combine all the relevant features into one clean column
-travel_df['combined_text'] = travel_df['region'] + ' ' + travel_df['type_category'] + ' ' + travel_df['keywords'] + ' ' + travel_df['formatted_address'] 
+travel_df['combined_text'] = travel_df['place'] + ' ' + travel_df['region'] + ' ' + travel_df['type_category'] + ' ' + travel_df['keywords'] + ' ' + travel_df['formatted_address'] 
 food_df['food_clean'] = food_df['formatted_region'] + ' ' + food_df['cuisine'] + ' ' + food_df['rating'] + ' '  + food_df['eating_type'] + ' '+ food_df['price'] + ' '+food_df['region'] + ' '+ food_df['comment'] + ' ' + food_df['second_comment'] 
 hotel_df['desc_clean'] = hotel_df['formatted_region'] + ' ' +  hotel_df['price_label'] + ' '+ hotel_df['rating_type'] + ' '  + hotel_df['description'] + ' ' + hotel_df['formatted_address'] + ' '+ hotel_df['region'] 
 
@@ -128,63 +114,15 @@ def check_region_travel(region):
 
 
 
-clean_spcl = re.compile('[/(){}\[\]\|@,;]')
-clean_symbol = re.compile('[^0-9a-z #+_]')
-stop_words = set(nltk_stopwords.words('english'))
-
-def clean_df(text):
-    if isinstance(text, list):
-        text = ' '.join(text)
-    text = text.lower()
-    text = re.sub("[^a-zA-Z0-9 ]", "", str(text))
-    text = clean_spcl.sub(' ', text)
-    text = clean_symbol.sub('', text)
-    text = ' '.join(word for word in text.split() if word not in stop_words)
-    return text
-
-region_input_travel = widgets.Text(
-    value='',
-    description='Enter the Regions for Travel (comma-separated):',
-    disabled=False
-)
-
-place_input_travel = widgets.Text(
-    value='',
-    description='Enter your Location/Type of Place for Travel:',
-    disabled=False
-)
-
-place_input_hotel = widgets.Text(
-    value='',
-    description='Enter your Description/Keywords for Hotel:',
-    disabled=False
-)
-
-food_input = widgets.Text(
-    value='',
-    description='Enter your Food Preferences:',
-    disabled=False
-)
-
-duration_input = widgets.Text(
-    value='',
-    description='Enter the Duration of Travel (in days):',
-    disabled=False
-)
-
-travel_place_list = widgets.Output()
-hotel_place_list = widgets.Output()
-food_list = widgets.Output()
-
 def get_top_recommendations(df, num_recommendations):
     return df.head(num_recommendations)
 
 def generate_itinerary(regions, travel_preferences, hotel_preferences, food_preferences, duration):
     itinerary = "Great! Here's your itinerary for your trip:\n\n"
-    
+
     num_days_per_region = duration // len(regions)
     remaining_days = duration % len(regions)
-    
+
     for i, region in enumerate(regions):
         if i == len(regions) - 1:
             if remaining_days > 0:
@@ -194,22 +132,13 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                 itinerary += f"Day {i*num_days_per_region+1}-{i*num_days_per_region+num_days_per_region}: {region}\n"
         else:
             itinerary += f"Day {i*num_days_per_region+1}-{i*num_days_per_region+num_days_per_region}: {region}\n"
-        
+
         # Travel Spot Recommendations
         travel_results = pd.DataFrame()
         travel_results = search_travel_spot(region, travel_preferences)
         num_travel_recommendations = min(10, len(travel_results))
         top_travel_recommendations = get_top_recommendations(travel_results, num_travel_recommendations)
-    
-        # Select travel recommendations based on travel preferences
-        if len(travel_preferences) > 0:
-            preferred_travel_results = top_travel_recommendations[
-                top_travel_recommendations['type_category'].str.contains('|'.join(travel_preferences), case=False)
-            ]
-            num_preferred_travel_recommendations = min(5, len(preferred_travel_results))
-            travel_recommendations = get_top_recommendations(preferred_travel_results, num_preferred_travel_recommendations)
-        else:
-            travel_recommendations = top_travel_recommendations.head(5)
+        travel_recommendations = top_travel_recommendations.head(5)
         
         if not travel_recommendations.empty:
             itinerary += f"Stay at the "
@@ -219,13 +148,13 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
             hotel_results = search_hotels(region, hotel_preferences)
             num_hotel_recommendations = min(10, len(hotel_results))
             top_hotel_recommendations = get_top_recommendations(hotel_results, num_hotel_recommendations)
-            
+
             # Select hotel recommendation
             hotel_recommendation = top_hotel_recommendations.head(1)
             
             if not hotel_recommendation.empty:
                 itinerary += f"{hotel_recommendation['name_hotel'].iloc[0]} or any other hotel of your choice from the list.\n"
-                
+
                 if not travel_recommendations.empty:
                     itinerary += "Explore "
                     for _, spot in travel_recommendations.iterrows():
@@ -233,23 +162,14 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                     itinerary = itinerary[:-2] + ".\n\n"
                 else:
                     itinerary += "\n"
-                
+
                 # Food Place Recommendations
                 food_results = pd.DataFrame()
                 food_results = search_food(region, food_preferences)
                 num_food_recommendations = min(10, len(food_results))
                 top_food_recommendations = get_top_recommendations(food_results, num_food_recommendations)
-                
-                # Filter food recommendations based on cuisine
-                if len(food_preferences) > 0:
-                    preferred_food_results = food_results[
-                        food_results['cuisine'].str.contains('|'.join(food_preferences), case=False)
-                    ]
-                    num_food_recommendations = min(5, len(preferred_food_results))
-                    top_food_recommendations = get_top_recommendations(preferred_food_results, num_food_recommendations)
-                else:
-                    top_food_recommendations = food_results.head(5)
-                
+                top_food_recommendations = food_results.head(5)
+
                 if not top_food_recommendations.empty:
                     itinerary += "Recommendations for places to eat near you:\n"
                     for _, food in top_food_recommendations.iterrows():
@@ -261,40 +181,44 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                 itinerary += "No hotel recommendations found.\n\n"
         else:
             itinerary += "No travel recommendations found.\n\n"
-    
-    itinerary += f"For your transportation needs, you can rent a minivan for ${random.randint(30, 100)}/day or a passenger van for ${random.randint(30, 100)}/day.\n"
+
     return itinerary
 
 def search_travel_spot(region, query):
-    region = clean_df(region)
-    query = clean_df(query)
-    
+
+
+    # Join the query list into a string
+    query_string = ' '.join(query)
+
     # Split the query into individual parameters
-    parameters = [param.strip() for param in query.split(',')]
+    parameters = query_string.split(',')
 
     results = pd.DataFrame()
-    
-    # Prepare the query string with all the parameters
-    query_string = f"{region} {' '.join(parameters)}"   
-    query_vector = vectorizer.transform([query_string])
-    similarity_scores = cosine_similarity(query_vector, tfidf).flatten()
 
-    # Filter based on region
-    region_indices = travel_df['region'].str.contains(region, case=False, regex=False)
-    filtered_scores = similarity_scores * region_indices
+    for preference in parameters:
+        # Prepare the query string with the current preference
+        query_string = f"{region} {preference.strip()}"
+        query_vector = vectorizer.transform([query_string])
+        similarity_scores = cosine_similarity(query_vector, tfidf).flatten()
 
-    top_indices = filtered_scores.argsort()[::-1]
-    results = travel_df.iloc[top_indices]
+        # Filter based on region
+        region_indices = travel_df['region'].str.contains(region, case=False, regex=False)
+        filtered_scores = similarity_scores * region_indices
+
+        top_indices = filtered_scores.argsort()[::-1]
+        preference_results = travel_df.iloc[top_indices]
+
+        results = pd.concat([results, preference_results], ignore_index=True)
+
     return results
 
-
 def search_hotels(region, query):
-    region = clean_df(region)
-    query = clean_df(query)
-    
+    # Join the query list into a string
+    query_string = ' '.join(query)
+
     # Split the query into individual parameters
-    parameters = query.split(',')
-    
+    parameters = query_string.split(',')
+
     # Prepare the query string with all the parameters
     query_string = f"{region} {' '.join(parameters)}"
     query_vector = vectorizer.transform([query_string])
@@ -309,14 +233,13 @@ def search_hotels(region, query):
     return results
 
 def search_food(region, query):
-    region = clean_df(region)
-    query = clean_df(query)
+    # Join the query list into a string
+    query_string = ' '.join(query)
 
     # Split the query into individual parameters
-    parameters = [param.strip() for param in query.split(',')]
+    parameters = query_string.split(',')
 
     results = pd.DataFrame()
-
     for preference in parameters:
         # Prepare the query string with the current preference
         query_string = f"{region} {preference.strip()}"
@@ -329,52 +252,57 @@ def search_food(region, query):
 
         top_indices = filtered_scores.argsort()[::-1]
         preference_results = food_df.iloc[top_indices]
-        
+
         results = pd.concat([results, preference_results], ignore_index=True)
 
     return results
 
+def check_region_travel(region):
+    valid_regions = set(travel_df['region'])
+    entered_region = clean_df(region.lower())
 
+    for valid_region in valid_regions:
+        if entered_region in valid_region:
+            return True
 
-def on_submit(change):
-    travel_place_list.clear_output()
-    hotel_place_list.clear_output()
-    food_list.clear_output()
-    
-    regions = region_input_travel.value.split(',')
-    travel_preferences = place_input_travel.value.split(',')
-    hotel_preferences = place_input_hotel.value.split(',')
-    food_preferences = food_input.value.split(',')
-    duration = duration_input.value
-    
+    return False
+
+def clean_df(text):
+    # Apply any necessary cleaning to the text
+    return text
+
+def get_user_input(prompt):
+    return input(prompt)
+
+def display_output(output):
+    print(output)
+
+def main():
+    region_input_travel = get_user_input("Enter the Regions for Travel (comma-separated): ")
+    place_input_travel = get_user_input("Enter your Location/Type of Place for Travel: ")
+    place_input_hotel = get_user_input("Enter your Description/Keywords for Hotel: ")
+    food_input = get_user_input("Enter your Food Preferences: ")
+    duration_input = get_user_input("Enter the Duration of Travel (in days): ")
+
+    regions = [region.strip() for region in region_input_travel.split(',')]  # Strip whitespace around each region
+    travel_preferences = place_input_travel.split(',')
+    hotel_preferences = place_input_hotel.split(',')
+    food_preferences = food_input.split(',')
+    duration = duration_input
+
     if len(regions) > 0 and len(travel_preferences) > 0 and len(hotel_preferences) > 0 and len(food_preferences) > 0 and duration.isdigit() and int(duration) > 0:
         valid_regions = []
         for region in regions:
             if check_region_travel(region):
                 valid_regions.append(region.strip())
-        
+
         if valid_regions:
             itinerary = generate_itinerary(valid_regions, travel_preferences, hotel_preferences, food_preferences, int(duration))
-            with travel_place_list:
-                display(itinerary)
+            display_output(itinerary)
         else:
-            with travel_place_list:
-                display("Sorry, the entered regions are not valid.")
+            display_output("Sorry, the entered regions are not valid.")
     else:
-        with travel_place_list:
-            display("Please enter valid regions, location/type of place for travel, description/keywords for hotel, food preferences, and duration of travel (in days).")
+        display_output("Please enter valid regions, location/type of place for travel, description/keywords for hotel, food preferences, and duration of travel (in days).")
 
-# Observe the changes in the input widgets and trigger the callback functions
-region_input_travel.on_submit(on_submit)
-place_input_travel.on_submit(on_submit)
-place_input_hotel.on_submit(on_submit)
-food_input.on_submit(on_submit)
-duration_input.on_submit(on_submit)
-
-# Display the input widgets
-display(widgets.VBox([region_input_travel, place_input_travel, place_input_hotel, food_input, duration_input]))
-
-# Initialize the output placeholders
-display(travel_place_list)
-display(hotel_place_list)
-display(food_list)
+if __name__ == '__main__':
+    main()
