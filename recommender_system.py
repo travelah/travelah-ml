@@ -113,7 +113,6 @@ def check_region_travel(region):
     return False
 
 
-
 def get_top_recommendations(df, num_recommendations):
     return df.head(num_recommendations)
 
@@ -122,7 +121,24 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
 
     num_days_per_region = duration // len(regions)
     remaining_days = duration % len(regions)
+    preference_counts = {}
 
+    travel_preferences_str = ", ".join(travel_preferences)
+    food_preferences_str = ", ".join(food_preferences)
+    
+    for preference in travel_preferences:
+        category = preference.split(':')[0].strip()
+        if category not in preference_counts:
+            preference_counts[category] = 0
+        preference_counts[category] += 1
+
+    total_recommendations = 0
+    num_recommendations_per_category = {}
+
+    for category, count in preference_counts.items():
+        num_recommendations_per_category[category] = count
+        total_recommendations += count
+      
     for i, region in enumerate(regions):
         if i == len(regions) - 1:
             if remaining_days > 0:
@@ -135,13 +151,20 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
 
         # Travel Spot Recommendations
         travel_results = pd.DataFrame()
-        travel_results = search_travel_spot(region, travel_preferences)
+        for preference, count in num_recommendations_per_category.items():
+            travel_results_category = search_travel_spot(region, [preference])
+            num_travel_recommendations = min(count, len(travel_results_category))
+            # Set the desired number of recommendations per preference category
+            num_recommendations = 2 
+            top_travel_recommendations = get_top_recommendations(travel_results_category, num_recommendations)
+            travel_results = pd.concat([travel_results, top_travel_recommendations], ignore_index=True)
+
         num_travel_recommendations = min(10, len(travel_results))
         top_travel_recommendations = get_top_recommendations(travel_results, num_travel_recommendations)
-        travel_recommendations = top_travel_recommendations.head(5)
+        travel_recommendations = top_travel_recommendations.head(6)
         
         if not travel_recommendations.empty:
-            itinerary += f"Stay at the "
+            itinerary += f"When you are in {region} the Best Place to Stay based on your preference is in the "
             
             # Hotel Recommendation
             hotel_results = pd.DataFrame()
@@ -153,13 +176,13 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
             hotel_recommendation = top_hotel_recommendations.head(1)
             
             if not hotel_recommendation.empty:
-                itinerary += f"{hotel_recommendation['name_hotel'].iloc[0]} or any other hotel of your choice from the list.\n"
+                itinerary += f"{hotel_recommendation['name_hotel'].iloc[0]} or any other hotel of your choice.\n"
 
                 if not travel_recommendations.empty:
-                    itinerary += "Explore "
+                    itinerary += f"You can enjoy {', '.join(travel_preferences)} by exploring the "
                     for _, spot in travel_recommendations.iterrows():
                         itinerary += spot['place'] + ", "
-                    itinerary = itinerary[:-2] + ".\n\n"
+                    itinerary = itinerary[:-2] + ".\n"
                 else:
                     itinerary += "\n"
 
@@ -168,13 +191,13 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                 food_results = search_food(region, food_preferences)
                 num_food_recommendations = min(10, len(food_results))
                 top_food_recommendations = get_top_recommendations(food_results, num_food_recommendations)
-                top_food_recommendations = food_results.head(5)
+                top_food_recommendations = food_results.head(3)
 
                 if not top_food_recommendations.empty:
-                    itinerary += "Recommendations for places to eat near you:\n"
+                    itinerary += f"After exploring, you can try eating {', '.join(food_preferences)} food at the "
                     for _, food in top_food_recommendations.iterrows():
-                        itinerary += "- " + food['place_name'] + "\n"
-                    itinerary += "\n"
+                        itinerary += food['place_name'] + ", "
+                    itinerary = itinerary[:-2] + ".\n"
                 else:
                     itinerary += "No food recommendations found.\n\n"
             else:
@@ -201,13 +224,17 @@ def search_travel_spot(region, query):
         query_vector = vectorizer.transform([query_string])
         similarity_scores = cosine_similarity(query_vector, tfidf).flatten()
 
-        # Filter based on region
         region_indices = travel_df['region'].str.contains(region, case=False, regex=False)
-        filtered_scores = similarity_scores * region_indices
+        category_indices = travel_df['type_category'].str.contains(preference.strip(), case=False, regex=True)
+        keywords_indices = travel_df['keywords'].str.contains(preference.strip(), case=False, regex=True)
+        rating_indices = travel_df['rating_label'].str.contains(preference.strip(), case=False, regex=True)
+        review_indices = travel_df['review_label'].str.contains(preference.strip(), case=False, regex=True)
+
+        filtered_scores = (similarity_scores * region_indices) + (category_indices +rating_indices+ keywords_indices + review_indices)
 
         top_indices = filtered_scores.argsort()[::-1]
         preference_results = travel_df.iloc[top_indices]
-
+        
         results = pd.concat([results, preference_results], ignore_index=True)
 
     return results
@@ -219,17 +246,28 @@ def search_hotels(region, query):
     # Split the query into individual parameters
     parameters = query_string.split(',')
 
+    results = pd.DataFrame()
+
+    for preference in parameters:
     # Prepare the query string with all the parameters
-    query_string = f"{region} {' '.join(parameters)}"
-    query_vector = vectorizer.transform([query_string])
-    similarity_scores = cosine_similarity(query_vector, tfidf_hotel).flatten()
+      query_string = f"{region} {' '.join(parameters)}"
+      query_vector = vectorizer.transform([query_string])
+      similarity_scores = cosine_similarity(query_vector, tfidf_hotel).flatten()
 
-    # Filter based on region
-    region_indices = hotel_df['formatted_region'].str.contains(region, case=False, regex=False)
-    filtered_scores = similarity_scores * region_indices
+  
+      region_indices = hotel_df['formatted_region'].str.contains(region, case=False, regex=False)
+      description_indices = hotel_df['description'].str.contains(preference.strip(), case=False, regex=True)
+      price_indices = hotel_df['price_label'].str.contains(preference.strip(), case=False, regex=True)
+      rating_indices = hotel_df['rating_type'].str.contains(preference.strip(), case=False, regex=True)
 
-    top_indices = filtered_scores.argsort()[::-1]
-    results = hotel_df.iloc[top_indices]
+
+
+      filtered_scores = (similarity_scores * region_indices) + (description_indices +price_indices+rating_indices)
+      top_indices = filtered_scores.argsort()[::-1]
+      preference_results = hotel_df.iloc[top_indices]
+
+      results = pd.concat([results, preference_results], ignore_index=True)
+
     return results
 
 def search_food(region, query):
@@ -246,13 +284,18 @@ def search_food(region, query):
         query_vector = vectorizer.transform([query_string])
         similarity_scores = cosine_similarity(query_vector, tfidf_food).flatten()
 
-        # Filter based on region
+        # Filter
         region_indices = food_df['formatted_region'].str.contains(region, case=False, regex=False)
-        filtered_scores = similarity_scores * region_indices
+        cuisine_indices = food_df['cuisine'].str.contains(preference.strip(), case=False, regex=True)
+        price_indices = food_df['price'].str.contains(preference.strip(), case=False, regex=True)
+        rating_indices = food_df['rating'].astype(str).str.contains(preference.strip(), case=False, regex=True)
+        review_indices = food_df['comment'].str.contains(preference.strip(), case=False, regex=True)
+        eating_type_indices = food_df['eating_type'].str.contains(preference.strip(), case=False, regex=True)
+        filtered_scores = (similarity_scores * region_indices) + (cuisine_indices + price_indices + rating_indices + review_indices + eating_type_indices)
 
         top_indices = filtered_scores.argsort()[::-1]
         preference_results = food_df.iloc[top_indices]
-
+        
         results = pd.concat([results, preference_results], ignore_index=True)
 
     return results
@@ -279,15 +322,15 @@ def display_output(output):
 
 def main():
     region_input_travel = get_user_input("Enter the Regions for Travel (comma-separated): ")
-    place_input_travel = get_user_input("Enter your Location/Type of Place for Travel: ")
-    place_input_hotel = get_user_input("Enter your Description/Keywords for Hotel: ")
+    place_input_travel = get_user_input("Enter your Travel Spot Preference: ")
+    place_input_hotel = get_user_input("Enter your Hotel Preference: ")
     food_input = get_user_input("Enter your Food Preferences: ")
     duration_input = get_user_input("Enter the Duration of Travel (in days): ")
 
     regions = [region.strip() for region in region_input_travel.split(',')]  # Strip whitespace around each region
-    travel_preferences = place_input_travel.split(',')
-    hotel_preferences = place_input_hotel.split(',')
-    food_preferences = food_input.split(',')
+    travel_preferences = [travel.strip() for travel in place_input_travel.split(',')]
+    hotel_preferences = [hotel.strip() for hotel in place_input_hotel.split(',')]
+    food_preferences = [food.strip() for food in food_input.split(',')]
     duration = duration_input
 
     if len(regions) > 0 and len(travel_preferences) > 0 and len(hotel_preferences) > 0 and len(food_preferences) > 0 and duration.isdigit() and int(duration) > 0:
