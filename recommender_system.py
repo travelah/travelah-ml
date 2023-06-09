@@ -123,8 +123,6 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
     remaining_days = duration % len(regions)
     preference_counts = {}
 
-    travel_preferences_str = ", ".join(travel_preferences)
-    food_preferences_str = ", ".join(food_preferences)
     
     for preference in travel_preferences:
         category = preference.split(':')[0].strip()
