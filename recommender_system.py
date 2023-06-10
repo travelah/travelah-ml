@@ -118,12 +118,11 @@ def get_top_recommendations(df, num_recommendations):
 
 def generate_itinerary(regions, travel_preferences, hotel_preferences, food_preferences, duration):
     itinerary = "Great! Here's your itinerary for your trip:\n\n"
-    all_recommendations= []
+    all_recommendations = []
     num_days_per_region = duration // len(regions)
     remaining_days = duration % len(regions)
     preference_counts = {}
 
-    
     for preference in travel_preferences:
         category = preference.split(':')[0].strip()
         if category not in preference_counts:
@@ -185,17 +184,16 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                     itinerary += "\n"
 
                 # Food Place Recommendations
-                food_results = pd.DataFrame()
-                food_results = search_food(region, food_preferences)
-                num_food_recommendations = min(10, len(food_results))
-                top_food_recommendations = get_top_recommendations(food_results, num_food_recommendations)
-                top_food_recommendations = food_results.head(3)
+                food_recommendations = []
+                for food_preference in food_preferences:
+                    food_results_category = search_food(region, [food_preference])
+                    num_food_recommendations = min(1, len(food_results_category))  # Limit to one recommendation per cuisine preference
+                    top_food_recommendations = get_top_recommendations(food_results_category, num_food_recommendations)
+                    food_recommendations.extend(top_food_recommendations['place_name'].tolist())
 
-                if not top_food_recommendations.empty:
-                    itinerary += f"After exploring, you can try eating {', '.join(food_preferences)} food at the "
-                    for _, food in top_food_recommendations.iterrows():
-                        itinerary += food['place_name'] + ", "
-                    itinerary = itinerary[:-2] + ".\n"
+                if food_recommendations:
+                    itinerary += f"For food preferences, you can try eating at the "
+                    itinerary += ", ".join(food_recommendations) + ".\n"
                 else:
                     itinerary += "No food recommendations found.\n\n"
             else:
@@ -205,9 +203,10 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
 
         all_recommendations.extend(travel_recommendations['place'].tolist())
         all_recommendations.extend(hotel_recommendation['name_hotel'].tolist())
-        all_recommendations.extend(top_food_recommendations['place_name'].tolist())
 
-    itinerary += f"\nAll Recommendations: {all_recommendations}"  
+    all_recommendations.extend(food_recommendations)  # Add food recommendations after travel and hotel recommendations
+
+    itinerary += f"\nAll Recommendations: {all_recommendations}"  # Add recommendations list to the itinerary
 
     return itinerary
 
