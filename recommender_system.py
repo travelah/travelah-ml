@@ -118,7 +118,7 @@ def get_top_recommendations(df, num_recommendations):
 
 def generate_itinerary(regions, travel_preferences, hotel_preferences, food_preferences, duration):
     itinerary = "Great! Here's your itinerary for your trip:\n\n"
-
+    all_recommendations= []
     num_days_per_region = duration // len(regions)
     remaining_days = duration % len(regions)
     preference_counts = {}
@@ -202,6 +202,12 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
                 itinerary += "No hotel recommendations found.\n\n"
         else:
             itinerary += "No travel recommendations found.\n\n"
+
+        all_recommendations.extend(travel_recommendations['place'].tolist())
+        all_recommendations.extend(hotel_recommendation['name_hotel'].tolist())
+        all_recommendations.extend(top_food_recommendations['place_name'].tolist())
+
+    itinerary += f"\nAll Recommendations: {all_recommendations}"  
 
     return itinerary
 
