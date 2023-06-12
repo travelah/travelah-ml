@@ -9,8 +9,7 @@ Original file is located at
 
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, MinMaxScaler
-from sklearn.model_selection import train_test_split
+import ast
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import nltk
@@ -119,6 +118,7 @@ def get_top_recommendations(df, num_recommendations):
 def generate_itinerary(regions, travel_preferences, hotel_preferences, food_preferences, duration):
     itinerary = "Great! Here's your itinerary for your trip:\n\n"
     all_recommendations = []
+    all_locations = [] 
     num_days_per_region = duration // len(regions)
     remaining_days = duration % len(regions)
     preference_counts = {}
@@ -161,7 +161,7 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
         travel_recommendations = top_travel_recommendations.head(6)
         
         if not travel_recommendations.empty:
-            itinerary += f"When you are in {region} the Best Place to Stay based on your preference is in the "
+            itinerary += f"When you are in {region}, the Best Place to Stay based on your preference is in the "
             
             # Hotel Recommendation
             hotel_results = pd.DataFrame()
@@ -173,12 +173,18 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
             hotel_recommendation = top_hotel_recommendations.head(1)
             
             if not hotel_recommendation.empty:
+                hotel_location = hotel_recommendation['location'].iloc[0]
+                location = ast.literal_eval(hotel_location)
+                all_locations.append({"place": hotel_recommendation['name_hotel'].iloc[0], "lat": location['lat'], "lng": location['lng']})  
+
                 itinerary += f"{hotel_recommendation['name_hotel'].iloc[0]} or any other hotel of your choice.\n"
 
                 if not travel_recommendations.empty:
                     itinerary += f"You can enjoy {', '.join(travel_preferences)} by exploring the "
                     for _, spot in travel_recommendations.iterrows():
                         itinerary += spot['place'] + ", "
+                        location = ast.literal_eval(spot['location'])
+                        all_locations.append({"place": spot['place'], "lat": location['lat'], "lng": location['lng']})  
                     itinerary = itinerary[:-2] + ".\n"
                 else:
                     itinerary += "\n"
@@ -193,7 +199,12 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
 
                 if food_recommendations:
                     itinerary += f"For food preferences, you can try eating at the "
-                    itinerary += ", ".join(food_recommendations) + ".\n"
+                    for place_name in food_recommendations:
+                        itinerary += place_name + ", "
+                        place_location = food_df.loc[food_df['place_name'] == place_name, 'location'].iloc[0]
+                        location = ast.literal_eval(place_location)
+                        all_locations.append({"place": place_name, "lat": location['lat'], "lng": location['lng']})  
+                    itinerary = itinerary[:-2] + ".\n"
                 else:
                     itinerary += "No food recommendations found.\n\n"
             else:
@@ -206,9 +217,12 @@ def generate_itinerary(regions, travel_preferences, hotel_preferences, food_pref
 
     all_recommendations.extend(food_recommendations)  # Add food recommendations after travel and hotel recommendations
 
-    itinerary += f"\nAll Recommendations: {all_recommendations}"  # Add recommendations list to the itinerary
+    all_recommendations_with_locations = [{"place": recommendation, "lat": next((location['lat'] for location in all_locations if location['place'] == recommendation), 'Unknown lat'), "lng": next((location['lng'] for location in all_locations if location['place'] == recommendation), 'Unknown lng')} for recommendation in all_recommendations]
+
+    itinerary += "All Recommendations: " + str(all_recommendations_with_locations)
 
     return itinerary
+
 
 def search_travel_spot(region, query):
 
